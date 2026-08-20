@@ -26,7 +26,14 @@ const PANEL = { x: 6, y: 71, w: 92, h: 17 };
 // The lever housing is a full-height column fused to the cabinet's right
 // flank -- a structural part of the machine, not a rod floating past the edge.
 const SIDE = { x: CAB.x + CAB.w - 1, y: CAB.y, w: 21, h: CAB.h };
-const LEVER = { x: SIDE.x + Math.round(SIDE.w / 2), y: 42, len: 13 };
+// Rest and pulled positions for a straight vertical plunge -- real cabinet
+// levers slide down out of a fixed collar, they don't swing like a wiper.
+const LEVER = {
+  x: SIDE.x + Math.round(SIDE.w / 2),
+  collarY: 30,
+  ballRestY: 37,
+  ballPulledY: 78,
+};
 
 const FRAME_TIME = 0.05;
 
@@ -150,15 +157,8 @@ function jackpotStrip(ctx: SKRSContext2D, s: Scene) {
   pixelTextCentered(ctx, text, cx, PANEL.y + PANEL.h + 4, PAL.l, 1, 1);
 }
 
-const LEVER_REST = -0.62;
-const LEVER_PULLED = 1.15;
-
-function leverAngle(u: number): number {
-  return LEVER_REST + (LEVER_PULLED - LEVER_REST) * u;
-}
-
-function leverTip(angle: number): { x: number; y: number } {
-  return { x: LEVER.x + Math.sin(angle) * LEVER.len, y: LEVER.y - Math.cos(angle) * LEVER.len };
+function leverBallY(u: number): number {
+  return LEVER.ballRestY + (LEVER.ballPulledY - LEVER.ballRestY) * u;
 }
 
 /**
@@ -184,41 +184,34 @@ function leverHousing(ctx: SKRSContext2D, s: Scene) {
     px(ctx, SIDE.x + SIDE.w - 3, ry, 1, 1, PAL.d);
   }
 
-  // arc-shaped slot cut into the housing that the arm swings through --
-  // a static groove, not animated, so it reads as a machined part of the column
-  for (let i = 0; i <= 10; i++) {
-    const a = leverAngle(i / 10);
-    const tip = leverTip(a);
-    const gx = LEVER.x + (tip.x - LEVER.x) * 0.62;
-    const gy = LEVER.y + (tip.y - LEVER.y) * 0.62;
-    px(ctx, gx, gy, 2, 2, PAL.k);
-  }
+  // straight vertical channel machined into the column -- the rod slides
+  // up and down inside it, so the housing itself signals the motion is a plunge
+  px(ctx, LEVER.x - 2, LEVER.collarY, 4, LEVER.ballPulledY - LEVER.collarY + 4, PAL.k);
+  px(ctx, LEVER.x - 1, LEVER.collarY, 2, LEVER.ballPulledY - LEVER.collarY + 4, PAL.d);
 
-  // pivot bracket: a round mechanical plate bolted to the column, with the
-  // hinge pin visible at its centre
-  px(ctx, LEVER.x - 4, LEVER.y - 4, 9, 9, PAL.d);
-  px(ctx, LEVER.x - 3, LEVER.y - 3, 7, 7, PAL.G);
-  px(ctx, LEVER.x - 3, LEVER.y - 3, 7, 1, PAL.w);
-  px(ctx, LEVER.x - 3, LEVER.y - 3, 1, 7, PAL.w);
-  px(ctx, LEVER.x - 1, LEVER.y - 1, 3, 3, PAL.k);
+  // fixed guide collar the rod passes through -- does not move, marks the
+  // rest stop the ball springs back up to
+  px(ctx, LEVER.x - 6, LEVER.collarY - 3, 13, 5, PAL.d);
+  px(ctx, LEVER.x - 5, LEVER.collarY - 2, 11, 3, PAL.G);
+  px(ctx, LEVER.x - 5, LEVER.collarY - 2, 11, 1, PAL.w);
+  px(ctx, LEVER.x - 6, LEVER.collarY - 3, 1, 1, PAL.d);
+  px(ctx, LEVER.x + 6, LEVER.collarY - 3, 1, 1, PAL.d);
 }
 
 function lever(ctx: SKRSContext2D, s: Scene) {
-  const angle = leverAngle(s.lever);
-  const tip = leverTip(angle);
+  const ballY = leverBallY(s.lever);
 
-  // 1px Bresenham-ish shaft from the pivot bracket to the ball, so the rod
-  // stays crisp at any angle
-  const steps = LEVER.len;
-  for (let i = 2; i <= steps; i++) {
-    const t = i / steps;
-    px(ctx, LEVER.x + (tip.x - LEVER.x) * t, LEVER.y + (tip.y - LEVER.y) * t, 2, 2, i % 3 === 0 ? PAL.W : PAL.w);
-  }
+  // rod: a round-shaded 2px shaft sliding down out of the collar
+  const rodTop = LEVER.collarY + 2;
+  const rodH = Math.max(0, ballY - rodTop - 2);
+  px(ctx, LEVER.x - 1, rodTop, 1, rodH, PAL.w);
+  px(ctx, LEVER.x, rodTop, 1, rodH, PAL.W);
+
   // ball knob
-  px(ctx, tip.x - 3, tip.y - 2, 6, 5, PAL.R);
-  px(ctx, tip.x - 2, tip.y - 3, 4, 7, PAL.R);
-  px(ctx, tip.x - 2, tip.y - 2, 2, 2, PAL.p);
-  px(ctx, tip.x - 1, tip.y + 1, 3, 2, PAL.r);
+  px(ctx, LEVER.x - 3, ballY - 2, 6, 5, PAL.R);
+  px(ctx, LEVER.x - 2, ballY - 3, 4, 7, PAL.R);
+  px(ctx, LEVER.x - 2, ballY - 2, 2, 2, PAL.p);
+  px(ctx, LEVER.x - 1, ballY + 1, 3, 2, PAL.r);
 }
 
 function sparkle(ctx: SKRSContext2D, s: Scene) {
