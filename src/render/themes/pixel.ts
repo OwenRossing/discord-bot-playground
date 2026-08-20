@@ -41,7 +41,10 @@ const LEVER = {
   x: CAB.x + CAB.w,
   y: CAB.y + CAB.h / 2,
   len: 24,
-  restAngle: (40 * Math.PI) / 180,
+  // 60 degrees up from horizontal at rest (comfortably in the 50-70 range a
+  // real cabinet handle sits at), swinging to the mirrored 60 degrees below
+  // horizontal when pulled -- opposite side of horizontal, same lean side.
+  restAngle: (30 * Math.PI) / 180,
   pulledAngle: (150 * Math.PI) / 180,
 };
 
