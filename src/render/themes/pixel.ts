@@ -3,6 +3,7 @@ import type { Scene, Theme } from '../types.js';
 import { drawReel } from '../paint.js';
 import { PAL, SPRITE_SIZE, drawPixelSymbol, validateSprites } from '../pixelsprites.js';
 import { pixelTextCentered, pixelText, textWidth } from '../pixelfont.js';
+import type { Actuator, Region } from '../actuators.js';
 
 validateSprites();
 
@@ -252,6 +253,36 @@ function sparkle(ctx: SKRSContext2D, s: Scene) {
   }
 }
 
+/** The strip of canvas to the right of the cabinet, where the control lives. */
+const ACT_REGION: Region = {
+  x: CAB.x + CAB.w,
+  y: CAB.y,
+  w: W - (CAB.x + CAB.w) - 1,
+  h: CAB.h,
+  cx: CAB.x + CAB.w + Math.round((W - (CAB.x + CAB.w) - 1) / 2),
+  cy: CAB.y + CAB.h / 2,
+};
+
+/**
+ * Build the theme around a given control. Passing no actuator keeps the
+ * original pull lever; passing one swaps in an alternative so the concepts
+ * can be compared on the real cabinet rather than in isolation.
+ */
+export function createPixelTheme(actuator?: Actuator): Theme {
+  return {
+    id: actuator ? `pixel-${actuator.id}` : 'pixel',
+    name: actuator ? `Pixel Arcade (${actuator.name})` : 'Pixel Arcade',
+    tagline: actuator?.note ?? 'Hand-drawn 16x16 sprites on a 26-colour palette, blown up 4x. Chunky and retro.',
+    baseW: W,
+    baseH: H,
+    scale: SCALE,
+    smooth: false,
+    maxColors: 96,
+    colors: { idle: 0x1b1f28, win: 0xffc93c, jackpot: 0xe8434d, lose: 0x4a5361 },
+    render: (ctx, s) => renderCabinet(ctx, s, actuator),
+  };
+}
+
 export const pixelTheme: Theme = {
   id: 'pixel',
   name: 'Pixel Arcade',
@@ -262,11 +293,14 @@ export const pixelTheme: Theme = {
   smooth: false,
   maxColors: 96,
   colors: { idle: 0x1b1f28, win: 0xffc93c, jackpot: 0xe8434d, lose: 0x4a5361 },
+  render: (ctx, s) => renderCabinet(ctx, s, undefined),
+};
 
-  render(ctx, s) {
+function renderCabinet(ctx: SKRSContext2D, s: Scene, actuator?: Actuator) {
+  {
     backdrop(ctx, s);
     cabinet(ctx, s);
-    leverBracket(ctx);
+    if (!actuator) leverBracket(ctx);
     marquee(ctx, s);
 
     // bezel recess
@@ -300,6 +334,14 @@ export const pixelTheme: Theme = {
     sparkle(ctx, s);
     panel(ctx, s);
     jackpotStrip(ctx, s);
-    lever(ctx, s);
-  },
-};
+    if (actuator) {
+      // Latches once the reels are away and stays set for the rest of the
+      // animation, so controls that shouldn't spring back have something
+      // monotonic to key off.
+      const fired = s.allStopped || s.reels.some((r) => r.speed > 0.5);
+      actuator.draw(ctx, ACT_REGION, { u: s.lever, fired }, s);
+    } else {
+      lever(ctx, s);
+    }
+  }
+}
