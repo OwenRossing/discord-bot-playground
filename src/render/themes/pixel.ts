@@ -23,16 +23,26 @@ const WIN_H = 40;
 const CENTER_Y = WIN_Y + WIN_H / 2;
 const CELL = 22;
 const PANEL = { x: 6, y: 71, w: 92, h: 17 };
-// The lever housing is a full-height column fused to the cabinet's right
-// flank -- a structural part of the machine, not a rod floating past the edge.
-const SIDE = { x: CAB.x + CAB.w - 1, y: CAB.y, w: 21, h: CAB.h };
-// Rest and pulled positions for a straight vertical plunge -- real cabinet
-// levers slide down out of a fixed collar, they don't swing like a wiper.
+// The lever is bolted straight to the cabinet's flank, at the vertical
+// midpoint of that side -- no separate housing column.
+//
+// It rotates about that pivot, rest-to-pulled, in a plane that runs toward
+// and away from the viewer rather than side to side. A flat screen can't
+// show that rotation as a curved path (there is no sideways component to
+// draw), so the arc instead reads through the rod itself: near both the
+// rest and pulled ends the arm is closer to the image plane and draws at
+// full length; at the midpoint of the pull it is rotating through the
+// depth axis, most foreshortened, so the rendered rod shortens to about
+// 60% there and the ball swells slightly, as if it has swung nearest the
+// camera. The tip barely drifts sideways -- almost all visible motion is
+// vertical, which is what makes it read as "pull down" rather than "swing
+// sideways."
 const LEVER = {
-  x: SIDE.x + Math.round(SIDE.w / 2),
-  collarY: 30,
-  ballRestY: 37,
-  ballPulledY: 78,
+  x: CAB.x + CAB.w,
+  y: CAB.y + CAB.h / 2,
+  len: 24,
+  restAngle: (40 * Math.PI) / 180,
+  pulledAngle: (150 * Math.PI) / 180,
 };
 
 const FRAME_TIME = 0.05;
@@ -59,7 +69,7 @@ function backdrop(ctx: SKRSContext2D, s: Scene) {
   for (let i = 0; i < 26; i++) {
     const x = (i * 37 + 11) % W;
     const y = (i * 61 + 5) % H;
-    if (x > CAB.x - 3 && x < SIDE.x + SIDE.w + 3) continue;
+    if (x > CAB.x - 3 && x < LEVER.x + LEVER.len + 4) continue;
     ctx.fillRect(x, y, 1, 1);
   }
 }
@@ -157,61 +167,72 @@ function jackpotStrip(ctx: SKRSContext2D, s: Scene) {
   pixelTextCentered(ctx, text, cx, PANEL.y + PANEL.h + 4, PAL.l, 1, 1);
 }
 
-function leverBallY(u: number): number {
-  return LEVER.ballRestY + (LEVER.ballPulledY - LEVER.ballRestY) * u;
+interface LeverTip {
+  x: number;
+  y: number;
+  /** 0..1, 1 at rest/pulled extremes, dips at the midpoint of the swing. */
+  reach: number;
+}
+
+function leverTip(u: number): LeverTip {
+  const angle = LEVER.restAngle + (LEVER.pulledAngle - LEVER.restAngle) * u;
+  // Pinches the rod's rendered length at the swing's midpoint, which is the
+  // instant a real rotation through the depth axis would foreshorten most.
+  const reach = 1 - 0.5 * (1 - (2 * u - 1) ** 2);
+  const len = LEVER.len * reach;
+  return {
+    x: LEVER.x + Math.sin(angle) * len,
+    y: LEVER.y - Math.cos(angle) * len,
+    reach,
+  };
 }
 
 /**
- * The chrome column the lever is bolted to: full cabinet height, capped top
- * and bottom, riveted down both edges like the cabinet itself. Drawn before
- * the reels/panel so it reads as one continuous machine rather than a part
- * stuck on afterwards.
+ * Hinge bracket bolted straight to the cabinet's flank -- a plate half on
+ * the cabinet, half hanging past its edge, with a visible pin. No separate
+ * housing: the lever mounts directly to the machine.
  */
-function leverHousing(ctx: SKRSContext2D, s: Scene) {
-  px(ctx, SIDE.x + 2, SIDE.y + 2, SIDE.w, SIDE.h, PAL.k); // drop shadow
-  bevel(ctx, SIDE.x, SIDE.y, SIDE.w, SIDE.h, PAL.g, PAL.w, PAL.d, PAL.k);
-
-  // top and bottom caps, matching the cabinet's red/gold so the column reads
-  // as part of the machine rather than a bare metal strip bolted beside it
-  px(ctx, SIDE.x, SIDE.y, SIDE.w, 5, PAL.R);
-  px(ctx, SIDE.x, SIDE.y + 4, SIDE.w, 1, PAL.Y);
-  px(ctx, SIDE.x, SIDE.y + SIDE.h - 5, SIDE.w, 5, PAL.R);
-  px(ctx, SIDE.x, SIDE.y + SIDE.h - 6, SIDE.w, 1, PAL.Y);
-
-  // rivets down both edges, spaced like the cabinet's
-  for (let ry = SIDE.y + 12; ry < SIDE.y + SIDE.h - 10; ry += 11) {
-    px(ctx, SIDE.x + 2, ry, 1, 1, PAL.d);
-    px(ctx, SIDE.x + SIDE.w - 3, ry, 1, 1, PAL.d);
-  }
-
-  // straight vertical channel machined into the column -- the rod slides
-  // up and down inside it, so the housing itself signals the motion is a plunge
-  px(ctx, LEVER.x - 2, LEVER.collarY, 4, LEVER.ballPulledY - LEVER.collarY + 4, PAL.k);
-  px(ctx, LEVER.x - 1, LEVER.collarY, 2, LEVER.ballPulledY - LEVER.collarY + 4, PAL.d);
-
-  // fixed guide collar the rod passes through -- does not move, marks the
-  // rest stop the ball springs back up to
-  px(ctx, LEVER.x - 6, LEVER.collarY - 3, 13, 5, PAL.d);
-  px(ctx, LEVER.x - 5, LEVER.collarY - 2, 11, 3, PAL.G);
-  px(ctx, LEVER.x - 5, LEVER.collarY - 2, 11, 1, PAL.w);
-  px(ctx, LEVER.x - 6, LEVER.collarY - 3, 1, 1, PAL.d);
-  px(ctx, LEVER.x + 6, LEVER.collarY - 3, 1, 1, PAL.d);
+function leverBracket(ctx: SKRSContext2D) {
+  px(ctx, LEVER.x - 5, LEVER.y - 7, 12, 14, PAL.d);
+  px(ctx, LEVER.x - 4, LEVER.y - 6, 10, 12, PAL.G);
+  px(ctx, LEVER.x - 4, LEVER.y - 6, 10, 1, PAL.w);
+  px(ctx, LEVER.x - 4, LEVER.y - 6, 1, 12, PAL.w);
+  px(ctx, LEVER.x - 5, LEVER.y - 7, 1, 1, PAL.k);
+  px(ctx, LEVER.x + 5, LEVER.y - 7, 1, 1, PAL.k);
+  px(ctx, LEVER.x - 5, LEVER.y + 6, 1, 1, PAL.k);
+  px(ctx, LEVER.x + 5, LEVER.y + 6, 1, 1, PAL.k);
+  // pivot pin
+  px(ctx, LEVER.x - 1, LEVER.y - 1, 3, 3, PAL.k);
+  px(ctx, LEVER.x - 1, LEVER.y - 1, 1, 1, PAL.w);
 }
 
 function lever(ctx: SKRSContext2D, s: Scene) {
-  const ballY = leverBallY(s.lever);
+  const tip = leverTip(s.lever);
 
-  // rod: a round-shaded 2px shaft sliding down out of the collar
-  const rodTop = LEVER.collarY + 2;
-  const rodH = Math.max(0, ballY - rodTop - 2);
-  px(ctx, LEVER.x - 1, rodTop, 1, rodH, PAL.w);
-  px(ctx, LEVER.x, rodTop, 1, rodH, PAL.W);
+  // Rod: a round-shaded 2px shaft from the pivot to the ball. Its length is
+  // whatever leverTip() computed for this instant -- short at the midpoint,
+  // full at both ends -- which is the whole depth illusion.
+  const dx = tip.x - LEVER.x;
+  const dy = tip.y - LEVER.y;
+  const dist = Math.hypot(dx, dy);
+  const steps = Math.max(1, Math.round(dist));
+  for (let i = 3; i <= steps; i++) {
+    const t = i / steps;
+    const px_ = LEVER.x + dx * t;
+    const py_ = LEVER.y + dy * t;
+    px(ctx, px_ - 1, py_ - 1, 1, 2, PAL.w);
+    px(ctx, px_, py_ - 1, 1, 2, PAL.W);
+  }
 
-  // ball knob
-  px(ctx, LEVER.x - 3, ballY - 2, 6, 5, PAL.R);
-  px(ctx, LEVER.x - 2, ballY - 3, 4, 7, PAL.R);
-  px(ctx, LEVER.x - 2, ballY - 2, 2, 2, PAL.p);
-  px(ctx, LEVER.x - 1, ballY + 1, 3, 2, PAL.r);
+  // ball knob -- swells very slightly at peak foreshortening, as if it has
+  // swung nearest the camera at that instant
+  const grow = tip.reach < 0.65 ? 1 : 0;
+  const bx = tip.x;
+  const by = tip.y;
+  px(ctx, bx - 3 - grow, by - 2 - grow, 6 + grow * 2, 5 + grow * 2, PAL.R);
+  px(ctx, bx - 2 - grow, by - 3 - grow, 4 + grow * 2, 7 + grow * 2, PAL.R);
+  px(ctx, bx - 2, by - 2, 2, 2, PAL.p);
+  px(ctx, bx - 1, by + 1, 3, 2, PAL.r);
 }
 
 function sparkle(ctx: SKRSContext2D, s: Scene) {
@@ -242,7 +263,7 @@ export const pixelTheme: Theme = {
   render(ctx, s) {
     backdrop(ctx, s);
     cabinet(ctx, s);
-    leverHousing(ctx, s);
+    leverBracket(ctx);
     marquee(ctx, s);
 
     // bezel recess
