@@ -23,7 +23,10 @@ const WIN_H = 40;
 const CENTER_Y = WIN_Y + WIN_H / 2;
 const CELL = 22;
 const PANEL = { x: 6, y: 71, w: 92, h: 17 };
-const LEVER = { x: 104, y: 40, len: 14 };
+// The lever housing is a full-height column fused to the cabinet's right
+// flank -- a structural part of the machine, not a rod floating past the edge.
+const SIDE = { x: CAB.x + CAB.w - 1, y: CAB.y, w: 21, h: CAB.h };
+const LEVER = { x: SIDE.x + Math.round(SIDE.w / 2), y: 42, len: 13 };
 
 const FRAME_TIME = 0.05;
 
@@ -49,7 +52,7 @@ function backdrop(ctx: SKRSContext2D, s: Scene) {
   for (let i = 0; i < 26; i++) {
     const x = (i * 37 + 11) % W;
     const y = (i * 61 + 5) % H;
-    if (x > CAB.x - 3 && x < CAB.x + CAB.w + 3) continue;
+    if (x > CAB.x - 3 && x < SIDE.x + SIDE.w + 3) continue;
     ctx.fillRect(x, y, 1, 1);
   }
 }
@@ -147,25 +150,75 @@ function jackpotStrip(ctx: SKRSContext2D, s: Scene) {
   pixelTextCentered(ctx, text, cx, PANEL.y + PANEL.h + 4, PAL.l, 1, 1);
 }
 
-function lever(ctx: SKRSContext2D, s: Scene) {
-  px(ctx, LEVER.x - 2, LEVER.y - 6, 5, 13, PAL.G);
-  px(ctx, LEVER.x - 1, LEVER.y - 5, 3, 11, PAL.w);
-  const rest = -0.62;
-  const angle = rest + (1.15 - rest) * s.lever;
-  const ex = LEVER.x + Math.sin(angle) * LEVER.len;
-  const ey = LEVER.y - Math.cos(angle) * LEVER.len;
+const LEVER_REST = -0.62;
+const LEVER_PULLED = 1.15;
 
-  // 1px Bresenham-ish shaft, so the rod stays crisp at any angle
-  const steps = LEVER.len;
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    px(ctx, LEVER.x + (ex - LEVER.x) * t, LEVER.y + (ey - LEVER.y) * t, 2, 2, i % 3 === 0 ? PAL.W : PAL.w);
+function leverAngle(u: number): number {
+  return LEVER_REST + (LEVER_PULLED - LEVER_REST) * u;
+}
+
+function leverTip(angle: number): { x: number; y: number } {
+  return { x: LEVER.x + Math.sin(angle) * LEVER.len, y: LEVER.y - Math.cos(angle) * LEVER.len };
+}
+
+/**
+ * The chrome column the lever is bolted to: full cabinet height, capped top
+ * and bottom, riveted down both edges like the cabinet itself. Drawn before
+ * the reels/panel so it reads as one continuous machine rather than a part
+ * stuck on afterwards.
+ */
+function leverHousing(ctx: SKRSContext2D, s: Scene) {
+  px(ctx, SIDE.x + 2, SIDE.y + 2, SIDE.w, SIDE.h, PAL.k); // drop shadow
+  bevel(ctx, SIDE.x, SIDE.y, SIDE.w, SIDE.h, PAL.g, PAL.w, PAL.d, PAL.k);
+
+  // top and bottom caps, matching the cabinet's red/gold so the column reads
+  // as part of the machine rather than a bare metal strip bolted beside it
+  px(ctx, SIDE.x, SIDE.y, SIDE.w, 5, PAL.R);
+  px(ctx, SIDE.x, SIDE.y + 4, SIDE.w, 1, PAL.Y);
+  px(ctx, SIDE.x, SIDE.y + SIDE.h - 5, SIDE.w, 5, PAL.R);
+  px(ctx, SIDE.x, SIDE.y + SIDE.h - 6, SIDE.w, 1, PAL.Y);
+
+  // rivets down both edges, spaced like the cabinet's
+  for (let ry = SIDE.y + 12; ry < SIDE.y + SIDE.h - 10; ry += 11) {
+    px(ctx, SIDE.x + 2, ry, 1, 1, PAL.d);
+    px(ctx, SIDE.x + SIDE.w - 3, ry, 1, 1, PAL.d);
   }
-  // knob
-  px(ctx, ex - 3, ey - 2, 6, 5, PAL.R);
-  px(ctx, ex - 2, ey - 3, 4, 7, PAL.R);
-  px(ctx, ex - 2, ey - 2, 2, 2, PAL.p);
-  px(ctx, ex - 1, ey + 1, 3, 2, PAL.r);
+
+  // arc-shaped slot cut into the housing that the arm swings through --
+  // a static groove, not animated, so it reads as a machined part of the column
+  for (let i = 0; i <= 10; i++) {
+    const a = leverAngle(i / 10);
+    const tip = leverTip(a);
+    const gx = LEVER.x + (tip.x - LEVER.x) * 0.62;
+    const gy = LEVER.y + (tip.y - LEVER.y) * 0.62;
+    px(ctx, gx, gy, 2, 2, PAL.k);
+  }
+
+  // pivot bracket: a round mechanical plate bolted to the column, with the
+  // hinge pin visible at its centre
+  px(ctx, LEVER.x - 4, LEVER.y - 4, 9, 9, PAL.d);
+  px(ctx, LEVER.x - 3, LEVER.y - 3, 7, 7, PAL.G);
+  px(ctx, LEVER.x - 3, LEVER.y - 3, 7, 1, PAL.w);
+  px(ctx, LEVER.x - 3, LEVER.y - 3, 1, 7, PAL.w);
+  px(ctx, LEVER.x - 1, LEVER.y - 1, 3, 3, PAL.k);
+}
+
+function lever(ctx: SKRSContext2D, s: Scene) {
+  const angle = leverAngle(s.lever);
+  const tip = leverTip(angle);
+
+  // 1px Bresenham-ish shaft from the pivot bracket to the ball, so the rod
+  // stays crisp at any angle
+  const steps = LEVER.len;
+  for (let i = 2; i <= steps; i++) {
+    const t = i / steps;
+    px(ctx, LEVER.x + (tip.x - LEVER.x) * t, LEVER.y + (tip.y - LEVER.y) * t, 2, 2, i % 3 === 0 ? PAL.W : PAL.w);
+  }
+  // ball knob
+  px(ctx, tip.x - 3, tip.y - 2, 6, 5, PAL.R);
+  px(ctx, tip.x - 2, tip.y - 3, 4, 7, PAL.R);
+  px(ctx, tip.x - 2, tip.y - 2, 2, 2, PAL.p);
+  px(ctx, tip.x - 1, tip.y + 1, 3, 2, PAL.r);
 }
 
 function sparkle(ctx: SKRSContext2D, s: Scene) {
@@ -196,6 +249,7 @@ export const pixelTheme: Theme = {
   render(ctx, s) {
     backdrop(ctx, s);
     cabinet(ctx, s);
+    leverHousing(ctx, s);
     marquee(ctx, s);
 
     // bezel recess
