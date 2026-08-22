@@ -138,17 +138,25 @@ export function leverAt(tl: Timeline, t: number): number {
 const easeOutCubic = (u: number) => 1 - Math.pow(1 - u, 3);
 const easeInOutCubic = (u: number) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
 
-/** Frame times and per-frame delays: sparse when idle, dense while spinning. */
-export function schedule(tl: Timeline): { t: number; delay: number }[] {
+/**
+ * Frame times and per-frame delays: sparse when idle, dense while spinning.
+ *
+ * `stretch` scales every step, trading smoothness for frames. Frame count
+ * drives file size roughly linearly, and the upload is the bulk of the wait
+ * before a result appears, so this is the main lever on how responsive a
+ * reroll feels.
+ */
+export function schedule(tl: Timeline, stretch = 1): { t: number; delay: number }[] {
   const out: { t: number; delay: number }[] = [];
   const push = (from: number, to: number, step: number) => {
-    for (let t = from; t < to - 1e-6; t += step) out.push({ t, delay: Math.round(step * 1000) });
+    const s = step * stretch;
+    for (let t = from; t < to - 1e-6; t += s) out.push({ t, delay: Math.round(s * 1000) });
   };
   push(0, tl.leverStart, 0.11);
   push(tl.leverStart, SPIN_START, 0.04);
   push(SPIN_START, tl.lastStop + 0.3, 0.05);
   push(tl.lastStop + 0.3, tl.duration, 0.09);
-  out.push({ t: tl.duration, delay: 1100 }); // hold on the result before looping
+  out.push({ t: tl.duration, delay: 1100 }); // hold on the result at the end
   return out;
 }
 

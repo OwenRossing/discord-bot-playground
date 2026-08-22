@@ -47,10 +47,15 @@ function sceneAt(tl: Timeline, input: RenderInput, t: number): Scene {
   };
 }
 
+export interface GifOptions {
+  /** Scales every frame step; >1 means fewer, longer-held frames. */
+  frameStretch?: number;
+}
+
 /** Render the full spin animation as an animated GIF. */
-export function renderSpinGif(theme: Theme, input: RenderInput): Buffer {
+export function renderSpinGif(theme: Theme, input: RenderInput, opts: GifOptions = {}): Buffer {
   const tl = planSpin(input.outcome);
-  const times = schedule(tl);
+  const times = schedule(tl, opts.frameStretch ?? 1);
 
   const base = createCanvas(theme.baseW, theme.baseH);
   const baseCtx = base.getContext('2d');
