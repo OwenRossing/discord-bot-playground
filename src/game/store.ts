@@ -49,6 +49,13 @@ export interface UserRecord {
 interface StoreData {
   version: number;
   jackpot: number;
+  /**
+   * Sub-credit remainder of the jackpot rake, carried between spins. Flooring
+   * each contribution on its own would drop the rake entirely for any bet
+   * below 1/JACKPOT_RATE, so a table of 25-credit players would never grow the
+   * pool at all.
+   */
+  jackpotFraction: number;
   users: Record<string, UserRecord>;
 }
 
@@ -65,12 +72,13 @@ export class Store {
 
   private load(): StoreData {
     if (!existsSync(this.file)) {
-      return { version: SCHEMA_VERSION, jackpot: JACKPOT_SEED, users: {} };
+      return { version: SCHEMA_VERSION, jackpot: JACKPOT_SEED, jackpotFraction: 0, users: {} };
     }
     const raw = JSON.parse(readFileSync(this.file, 'utf8')) as StoreData;
     if (raw.version !== SCHEMA_VERSION) {
       throw new Error(`store schema ${raw.version} != ${SCHEMA_VERSION}; migrate before starting`);
     }
+    raw.jackpotFraction ??= 0;
     return raw;
   }
 
@@ -127,7 +135,9 @@ export class Store {
     if (!Number.isInteger(bet) || bet <= 0) return { ok: false, reason: 'Bet must be a whole number above zero.' };
     if (bet > u.balance) return { ok: false, reason: `You only have ${u.balance} credits.` };
     u.balance -= bet;
-    this.data.jackpot += Math.floor(bet * JACKPOT_RATE);
+    const rake = bet * JACKPOT_RATE + this.data.jackpotFraction;
+    this.data.jackpot += Math.floor(rake);
+    this.data.jackpotFraction = rake - Math.floor(rake);
     const nonce = u.seeds.nonce;
     u.seeds.nonce += 1;
     this.save();
