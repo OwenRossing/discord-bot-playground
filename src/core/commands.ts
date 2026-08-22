@@ -17,6 +17,8 @@ export interface Ctx {
   theme: Theme;
   /** Discord id with unrestricted rights, or null if none is configured. */
   superAdminId: string | null;
+  /** Passed through to the encoder; see config.gifFrameStretch. */
+  frameStretch?: number;
 }
 
 export const isAdmin = (ctx: Ctx, id: string) => ctx.superAdminId !== null && ctx.superAdminId === id;
@@ -50,7 +52,7 @@ export async function spin(ctx: Ctx, caller: Caller, requestedBet: number): Prom
     const settled = store.settle(caller.id, outcome);
 
     const name = `spin-${placed.nonce}.gif`;
-    const gif = renderSpinGif(theme, { outcome, creditsBefore, jackpot });
+    const gif = renderSpinGif(theme, { outcome, creditsBefore, jackpot }, { frameStretch: ctx.frameStretch });
 
     return {
       title: outcome.jackpotWon ? '🎰 JACKPOT!' : outcome.payout > 0 ? `✨ ${outcome.rule?.label ?? 'Winner'}` : 'No win',
@@ -67,7 +69,10 @@ export async function spin(ctx: Ctx, caller: Caller, requestedBet: number): Prom
       image: { name, data: gif, contentType: 'image/gif' },
       footer: `Jackpot ${credits(store.jackpot)} · spin #${placed.nonce} · ${user.seeds.serverSeedHash.slice(0, 16)}…`,
       buttons: [
-        { id: `spin-again:${bet}`, label: `Spin again (${credits(bet)})`, style: 'primary', emoji: '🎰' },
+        // The owner rides along so the handler can tell a reroll by the player
+        // who spun -- which edits this message -- from someone else's click,
+        // which must get its own message rather than overwrite this result.
+        { id: `spin-again:${bet}:${caller.id}`, label: `Spin again (${credits(bet)})`, style: 'primary', emoji: '🎰' },
         { id: 'show-fairness', label: 'Fairness', style: 'secondary' },
       ],
     };

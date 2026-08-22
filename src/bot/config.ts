@@ -44,6 +44,15 @@ export const config = {
   storeFile: process.env.STORE_FILE ?? join(process.cwd(), 'data', 'store.json'),
   themeId: process.env.THEME ?? 'pixel',
 
+  /**
+   * Upscale factor and frame thinning. Both trade animation fidelity for file
+   * size, and file size is most of the wait before a result appears, so these
+   * are the two knobs that decide how responsive a reroll feels. Keep the
+   * scale a whole number -- a fractional upscale destroys the pixel art.
+   */
+  gifScale: Number(process.env.GIF_SCALE ?? 3),
+  gifFrameStretch: Number(process.env.GIF_FRAME_STRETCH ?? 1.5),
+
   webPort: Number(process.env.WEB_PORT ?? 4317),
   /** 0.0.0.0 exposes the panel to the LAN; 127.0.0.1 keeps it on this machine. */
   webHost: process.env.WEB_HOST ?? '127.0.0.1',

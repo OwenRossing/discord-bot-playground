@@ -6,11 +6,15 @@ import type { Caller, CommandResult } from '../core/results.js';
 import { config } from './config.js';
 import { toReply } from './render-result.js';
 
-const theme = THEMES[config.themeId] ?? THEMES[DEFAULT_THEME];
+const base = THEMES[config.themeId] ?? THEMES[DEFAULT_THEME];
+// Scale is a theme property, so the configured value is applied here rather
+// than baked into the theme itself.
+const theme = { ...base, scale: config.gifScale };
 const ctx: core.Ctx = {
   store: new Store(config.storeFile),
   theme,
   superAdminId: config.superAdminId,
+  frameStretch: config.gifFrameStretch,
 };
 
 // Slash commands and buttons both arrive as interactions, so the bot needs no
@@ -42,11 +46,25 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
 
   try {
     if (interaction.isButton()) {
-      const [id, arg] = interaction.customId.split(':');
+      const [id, arg, owner] = interaction.customId.split(':');
       if (id === 'spin-again') {
+        const bet = Number(arg) || core.DEFAULT_BET;
+        if (owner === caller.id) {
+          // The player rerolling their own spin: replace the machine's state in
+          // place, so hammering the button does not bury the channel.
+          await interaction.deferUpdate();
+          const result = await core.spin(ctx, caller, bet);
+          if (result.ephemeral) return void (await interaction.followUp(toReply(theme, result)));
+          const { flags, ...rest } = toReply(theme, result);
+          // Editing with a new file needs the old attachment dropped, or the
+          // embed keeps pointing at the previous spin's GIF.
+          return void (await interaction.editReply({ ...rest, attachments: [] }));
+        }
+        // Someone else's message: they get their own result rather than
+        // overwriting the original player's.
         await interaction.deferReply();
         deferred = true;
-        return await send(interaction, await core.spin(ctx, caller, Number(arg) || core.DEFAULT_BET), true);
+        return await send(interaction, await core.spin(ctx, caller, bet), true);
       }
       if (id === 'show-fairness') {
         return await send(interaction, core.fairnessInfo(ctx, caller), false);

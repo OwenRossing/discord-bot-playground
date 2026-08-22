@@ -13,8 +13,16 @@ import * as core from '../core/commands.js';
 import type { Caller, CommandResult } from '../core/results.js';
 import { config } from '../bot/config.js';
 
-const theme = THEMES[config.themeId] ?? THEMES[DEFAULT_THEME];
-const ctx: core.Ctx = { store: new Store(config.storeFile), theme, superAdminId: config.superAdminId };
+const base = THEMES[config.themeId] ?? THEMES[DEFAULT_THEME];
+// Scale is a theme property, so the configured value is applied here rather
+// than baked into the theme itself.
+const theme = { ...base, scale: config.gifScale };
+const ctx: core.Ctx = {
+  store: new Store(config.storeFile),
+  theme,
+  superAdminId: config.superAdminId,
+  frameStretch: config.gifFrameStretch,
+};
 
 const app = express();
 app.use(express.json());
