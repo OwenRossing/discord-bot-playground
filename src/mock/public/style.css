@@ -1,0 +1,126 @@
+/* Palette lifted from PAL in pixelsprites.ts, so the console and the machine
+   it administers are visibly the same object. Hard edges, no rounded corners,
+   no shadows: the cabinet art is 1px-outlined and the UI should agree. */
+:root {
+  --k: #0a0c10; --d: #1b1f28; --g: #333b4a; --G: #4a5361;
+  --w: #8b95a5; --W: #d8dee8; --F: #ffffff;
+  --r: #6b0f1a; --R: #b3222e; --e: #e8434d; --p: #ff8a80;
+  --o: #7a4a00; --y: #c98b12; --Y: #ffc93c; --l: #ffe9a8;
+  --N: #2f8f3f; --m: #63c96b;
+  --C: #1e9ec4; --s: #58d7ef;
+  --U: #7040ad; --v: #a97ae0;
+  --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--k);
+  color: var(--W);
+  font: 13px/1.5 var(--mono);
+  /* Faint scanlines, the one decorative flourish -- it ties the page to the
+     CRT the reels are drawn on without costing legibility. */
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 3px);
+}
+
+a { color: var(--s); }
+
+/* --- chrome ------------------------------------------------------------- */
+header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px;
+  background: var(--d);
+  border-bottom: 1px solid var(--g);
+}
+header .mark { color: var(--Y); letter-spacing: 2px; font-weight: 700; }
+header .mark span { color: var(--e); }
+nav { display: flex; gap: 2px; margin-left: auto; }
+nav button {
+  background: var(--k); color: var(--w);
+  border: 1px solid var(--g); border-bottom: none;
+  padding: 6px 14px; cursor: pointer; font: inherit;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+nav button:hover { color: var(--W); background: var(--g); }
+nav button[aria-selected="true"] { color: var(--Y); background: var(--d); border-color: var(--Y); }
+
+main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+.view[hidden] { display: none; }
+
+h2 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 2px;
+  color: var(--w); margin: 0 0 8px; font-weight: 400;
+}
+
+/* --- panels ------------------------------------------------------------- */
+.panel { background: var(--d); border: 1px solid var(--g); padding: 12px; margin-bottom: 12px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.grow { flex: 1 1 auto; min-width: 0; }
+
+input, select {
+  background: var(--k); color: var(--W);
+  border: 1px solid var(--g); padding: 6px 8px; font: inherit;
+}
+input:focus, select:focus { outline: none; border-color: var(--s); }
+label { color: var(--w); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+
+button.act {
+  background: var(--g); color: var(--W); border: 1px solid var(--G);
+  padding: 6px 14px; cursor: pointer; font: inherit;
+}
+button.act:hover { background: var(--G); }
+button.act.primary { background: var(--R); border-color: var(--e); color: var(--F); }
+button.act.primary:hover { background: var(--e); }
+button.act.danger { background: var(--r); border-color: var(--R); color: var(--p); }
+button.act:disabled { opacity: .45; cursor: not-allowed; }
+
+/* --- channel ------------------------------------------------------------ */
+#feed { display: flex; flex-direction: column; gap: 10px; }
+
+.msg { display: flex; gap: 10px; padding: 8px; background: var(--d); border-left: 2px solid var(--g); }
+.msg .avatar {
+  width: 34px; height: 34px; flex: none;
+  background: var(--g); color: var(--Y);
+  display: grid; place-items: center; font-weight: 700;
+}
+.msg .who { color: var(--W); font-weight: 700; }
+.msg .when { color: var(--G); font-size: 11px; margin-left: 6px; }
+.msg.cmd .body { color: var(--w); }
+
+/* Embed: the left accent bar is the whole visual idea, same as Discord. */
+.embed { border-left: 3px solid var(--G); background: var(--k); padding: 10px 12px; margin-top: 6px; max-width: 460px; }
+.embed.win { border-left-color: var(--Y); }
+.embed.jackpot { border-left-color: var(--e); }
+.embed.lose { border-left-color: var(--G); }
+.embed .title { color: var(--F); font-weight: 700; margin-bottom: 4px; }
+.embed .desc { color: var(--W); white-space: pre-wrap; margin-bottom: 6px; }
+.embed .fields { display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 8px 0; }
+.embed .field { min-width: 90px; }
+.embed .field.block { flex-basis: 100%; }
+.embed .field .n { color: var(--w); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.embed .field .v { color: var(--W); white-space: pre-wrap; }
+.embed img { display: block; margin-top: 8px; max-width: 100%; image-rendering: pixelated; }
+.embed .foot { color: var(--G); font-size: 11px; margin-top: 8px; }
+.embed .ephemeral { color: var(--v); font-size: 11px; margin-bottom: 6px; }
+.embed .buttons { display: flex; gap: 6px; margin-top: 8px; }
+
+code { background: var(--k); border: 1px solid var(--g); padding: 0 4px; color: var(--l); word-break: break-all; }
+
+/* --- tables ------------------------------------------------------------- */
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--g); }
+th { color: var(--w); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 400; }
+tbody tr:hover { background: var(--g); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.granted { color: var(--Y); }
+.pos { color: var(--m); }
+.neg { color: var(--e); }
+.muted { color: var(--G); }
+
+.pill { border: 1px solid var(--g); padding: 1px 6px; color: var(--w); font-size: 11px; }
+
+/* --- gate --------------------------------------------------------------- */
+#gate { max-width: 380px; margin: 12vh auto; }
+#gate .panel { border-color: var(--Y); }
+.err { color: var(--e); min-height: 18px; }

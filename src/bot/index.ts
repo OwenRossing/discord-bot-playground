@@ -1,95 +1,125 @@
-import { Client, Events, GatewayIntentBits, MessageFlags, type Interaction } from 'discord.js';
+import { Client, Events, GatewayIntentBits, MessageFlags, type Interaction, type RepliableInteraction } from 'discord.js';
 import { Store } from '../game/store.js';
 import { THEMES, DEFAULT_THEME } from '../render/themes/index.js';
+import * as core from '../core/commands.js';
+import type { Caller, CommandResult } from '../core/results.js';
 import { config } from './config.js';
-import { SPIN_AGAIN_ID, SHOW_FAIRNESS_ID } from './commands.js';
-import { runSpin } from './spin.js';
-import { infoEmbed } from './embeds.js';
-import {
-  handleBalance,
-  handleDaily,
-  handleLeaderboard,
-  handleOdds,
-  handleSeed,
-  handleStats,
-  handleVerify,
-  type Deps,
-} from './handlers.js';
-
-const DEFAULT_BET = 25;
+import { toReply } from './render-result.js';
 
 const theme = THEMES[config.themeId] ?? THEMES[DEFAULT_THEME];
-const deps: Deps = { store: new Store(config.storeFile), theme };
+const ctx: core.Ctx = {
+  store: new Store(config.storeFile),
+  theme,
+  superAdminId: config.superAdminId,
+};
 
-// Slash commands and buttons are all this bot uses, and both arrive as
-// interactions, so it needs no privileged intents and cannot read messages.
+// Slash commands and buttons both arrive as interactions, so the bot needs no
+// privileged intents and cannot read channel messages.
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 client.once(Events.ClientReady, (c) => {
   console.log(`Ready as ${c.user.tag} — theme "${theme.id}"`);
+  console.log(config.superAdminId ? `Super admin: ${config.superAdminId}` : 'No super admin configured');
 });
 
+/** Spins render a GIF and upload it, so they are deferred; nothing else is. */
+async function send(interaction: RepliableInteraction, result: CommandResult, deferred: boolean) {
+  const reply = toReply(theme, result);
+  if (deferred) {
+    // A deferred reply is already a public message, and editReply cannot carry
+    // the Ephemeral flag, so an ephemeral result goes out as a follow-up.
+    if (result.ephemeral) return void (await interaction.followUp(reply));
+    const { flags, ...rest } = reply;
+    return void (await interaction.editReply(rest));
+  }
+  await interaction.reply(reply);
+}
+
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+  if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
+  const caller: Caller = { id: interaction.user.id, name: interaction.user.displayName };
+  let deferred = false;
+
   try {
-    if (interaction.isChatInputCommand()) {
-      switch (interaction.commandName) {
-        case 'spin':
-          return await runSpin(interaction, deps, interaction.options.getInteger('bet') ?? DEFAULT_BET);
-        case 'balance':
-          return await handleBalance(interaction, deps);
-        case 'daily':
-          return await handleDaily(interaction, deps);
-        case 'leaderboard':
-          return await handleLeaderboard(interaction, deps);
-        case 'stats':
-          return await handleStats(interaction, deps);
-        case 'odds':
-          return await handleOdds(interaction, deps);
-        case 'seed':
-          return await handleSeed(interaction, deps);
-        case 'verify':
-          return await handleVerify(interaction, deps);
+    if (interaction.isButton()) {
+      const [id, arg] = interaction.customId.split(':');
+      if (id === 'spin-again') {
+        await interaction.deferReply();
+        deferred = true;
+        return await send(interaction, await core.spin(ctx, caller, Number(arg) || core.DEFAULT_BET), true);
+      }
+      if (id === 'show-fairness') {
+        return await send(interaction, core.fairnessInfo(ctx, caller), false);
       }
       return;
     }
 
-    if (interaction.isButton()) {
-      const [id, arg] = interaction.customId.split(':');
-
-      if (id === SPIN_AGAIN_ID) {
-        // Anyone may spin from someone else's message; the bet rides along in
-        // the custom id, and the stake comes out of whoever clicked.
-        return await runSpin(interaction, deps, Number(arg) || DEFAULT_BET);
+    const o = interaction.options;
+    switch (interaction.commandName) {
+      case 'spin': {
+        await interaction.deferReply();
+        deferred = true;
+        return await send(interaction, await core.spin(ctx, caller, o.getInteger('bet') ?? core.DEFAULT_BET), true);
       }
-
-      if (id === SHOW_FAIRNESS_ID) {
-        const u = deps.store.user(interaction.user.id);
-        const embed = infoEmbed(
-          theme,
-          'How this is provably fair',
-          'Every spin is `HMAC-SHA256(server seed, client seed:nonce)`. The server seed was fixed and its hash published before you played, so it cannot have been chosen to fit a result. Run `/seed` to rotate and reveal it, then `/verify` to recompute any spin yourself.',
-        ).addFields(
-          { name: 'Your committed server seed hash', value: `\`${u.seeds.serverSeedHash}\`` },
-          { name: 'Client seed', value: `\`${u.seeds.clientSeed}\``, inline: true },
-          { name: 'Spins on this seed', value: String(u.seeds.nonce), inline: true },
+      case 'balance':
+        return await send(interaction, core.balance(ctx, caller), false);
+      case 'daily':
+        return await send(interaction, core.daily(ctx, caller), false);
+      case 'leaderboard':
+        return await send(interaction, core.leaderboard(ctx), false);
+      case 'stats': {
+        const u = o.getUser('player') ?? interaction.user;
+        return await send(interaction, core.stats(ctx, { id: u.id, name: u.displayName }), false);
+      }
+      case 'odds':
+        return await send(interaction, core.odds(ctx), false);
+      case 'seed':
+        return await send(interaction, core.seeds(ctx, caller, o.getString('client_seed')), false);
+      case 'verify':
+        return await send(
+          interaction,
+          core.verify(
+            o.getString('server_seed', true),
+            o.getString('server_seed_hash', true),
+            o.getString('client_seed', true),
+            o.getInteger('nonce', true),
+          ),
+          false,
         );
-        return void (await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral }));
+      case 'admin': {
+        const sub = o.getSubcommand();
+        const reason = o.getString('reason') ?? undefined;
+        if (sub === 'grant' || sub === 'deduct') {
+          const amount = o.getInteger('amount', true);
+          return await send(
+            interaction,
+            core.adminAdjust(ctx, caller, o.getUser('player', true).id, sub === 'grant' ? amount : -amount, reason),
+            false,
+          );
+        }
+        if (sub === 'reset') {
+          return await send(interaction, core.adminReset(ctx, caller, o.getUser('player', true).id, reason), false);
+        }
+        if (sub === 'jackpot') {
+          return await send(interaction, core.adminJackpot(ctx, caller, o.getInteger('amount', true), reason), false);
+        }
+        if (sub === 'audit') return await send(interaction, core.adminAudit(ctx, caller), false);
+        return;
       }
     }
   } catch (err) {
     console.error('interaction failed', err);
-    if (!interaction.isRepliable()) return;
     const content = 'Something went wrong handling that.';
-    // A deferred interaction has already been acknowledged, so replying again
-    // would throw and bury the original error.
-    if (interaction.deferred || interaction.replied) await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+    // Replying twice throws and buries the original error, so branch on
+    // whether this interaction was already acknowledged.
+    if (deferred || interaction.replied) await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
     else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
   }
 });
 
 async function shutdown(signal: string) {
   console.log(`\n${signal} — flushing store`);
-  await deps.store.save();
+  await ctx.store.save();
   await client.destroy();
   process.exit(0);
 }

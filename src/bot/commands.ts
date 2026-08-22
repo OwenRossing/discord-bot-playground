@@ -1,5 +1,5 @@
-import { SlashCommandBuilder } from 'discord.js';
-import { MAX_BET, MIN_BET } from './config.js';
+import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { MAX_BET, MIN_BET } from '../core/commands.js';
 
 export const commands = [
   new SlashCommandBuilder()
@@ -46,6 +46,44 @@ export const commands = [
     .addStringOption((o) =>
       o.setName('server_seed_hash').setDescription('The hash committed before you played').setRequired(true),
     ),
+  // Every subcommand re-checks the caller against SUPER_ADMIN_ID. This default
+  // only tidies the command list for ordinary members -- Discord lets server
+  // admins re-enable it, so it is not the access control.
+  new SlashCommandBuilder()
+    .setName('admin')
+    .setDescription('Owner-only controls')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommand((s) =>
+      s
+        .setName('grant')
+        .setDescription('Create credits for a player')
+        .addUserOption((o) => o.setName('player').setDescription('Who').setRequired(true))
+        .addIntegerOption((o) => o.setName('amount').setDescription('How many').setMinValue(1).setRequired(true))
+        .addStringOption((o) => o.setName('reason').setDescription('Why, for the audit log')),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('deduct')
+        .setDescription('Remove credits from a player')
+        .addUserOption((o) => o.setName('player').setDescription('Who').setRequired(true))
+        .addIntegerOption((o) => o.setName('amount').setDescription('How many').setMinValue(1).setRequired(true))
+        .addStringOption((o) => o.setName('reason').setDescription('Why, for the audit log')),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('reset')
+        .setDescription('Reset a player to a fresh start')
+        .addUserOption((o) => o.setName('player').setDescription('Who').setRequired(true))
+        .addStringOption((o) => o.setName('reason').setDescription('Why, for the audit log')),
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('jackpot')
+        .setDescription('Set the progressive pool')
+        .addIntegerOption((o) => o.setName('amount').setDescription('Credits').setMinValue(0).setRequired(true))
+        .addStringOption((o) => o.setName('reason').setDescription('Why, for the audit log')),
+    )
+    .addSubcommand((s) => s.setName('audit').setDescription('Recent admin actions')),
 ].map((c) => c.toJSON());
 
 export const SPIN_AGAIN_ID = 'spin-again';

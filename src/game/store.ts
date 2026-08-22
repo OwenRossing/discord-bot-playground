@@ -24,6 +24,25 @@ export interface UserStats {
   won: number;
   biggestWin: number;
   jackpots: number;
+  /**
+   * Credits an admin created out of nothing, tracked separately from winnings.
+   * The spins themselves are provably fair, so a balance that silently mixes
+   * minted credits with earned ones would make the leaderboard the one part of
+   * the machine nobody can check.
+   */
+  granted: number;
+}
+
+export interface AuditEntry {
+  at: number;
+  /** Discord id of the admin who did it. */
+  by: string;
+  action: 'grant' | 'deduct' | 'reset' | 'jackpot';
+  /** Who it was done to, absent for pool-level actions. */
+  target?: string;
+  amount: number;
+  balanceAfter: number;
+  reason?: string;
 }
 
 /** A seed pair that has been retired, and so may safely be revealed. */
@@ -57,9 +76,20 @@ interface StoreData {
    */
   jackpotFraction: number;
   users: Record<string, UserRecord>;
+  /** Newest last. Trimmed to the most recent entries. */
+  audit: AuditEntry[];
 }
 
-const emptyStats = (): UserStats => ({ spins: 0, wagered: 0, won: 0, biggestWin: 0, jackpots: 0 });
+const AUDIT_LIMIT = 500;
+
+const emptyStats = (): UserStats => ({
+  spins: 0,
+  wagered: 0,
+  won: 0,
+  biggestWin: 0,
+  jackpots: 0,
+  granted: 0,
+});
 
 export class Store {
   private data: StoreData;
@@ -72,13 +102,15 @@ export class Store {
 
   private load(): StoreData {
     if (!existsSync(this.file)) {
-      return { version: SCHEMA_VERSION, jackpot: JACKPOT_SEED, jackpotFraction: 0, users: {} };
+      return { version: SCHEMA_VERSION, jackpot: JACKPOT_SEED, jackpotFraction: 0, users: {}, audit: [] };
     }
     const raw = JSON.parse(readFileSync(this.file, 'utf8')) as StoreData;
     if (raw.version !== SCHEMA_VERSION) {
       throw new Error(`store schema ${raw.version} != ${SCHEMA_VERSION}; migrate before starting`);
     }
     raw.jackpotFraction ??= 0;
+    raw.audit ??= [];
+    for (const u of Object.values(raw.users)) u.stats.granted ??= 0;
     return raw;
   }
 
@@ -194,6 +226,62 @@ export class Store {
     u.seeds = newSeedPair(clientSeed);
     this.save();
     return { revealed, next: u.seeds };
+  }
+
+  /**
+   * Credit or debit a balance directly. Every call is recorded, and grants add
+   * to the user's `granted` total so earned credits stay distinguishable from
+   * minted ones -- an admin can move any number they like, but not invisibly.
+   */
+  adjust(
+    by: string,
+    target: string,
+    amount: number,
+    reason?: string,
+  ): { ok: false; reason: string } | { ok: true; entry: AuditEntry } {
+    if (!Number.isInteger(amount) || amount === 0) {
+      return { ok: false, reason: 'Amount must be a non-zero whole number.' };
+    }
+    const u = this.user(target);
+    if (u.balance + amount < 0) {
+      return { ok: false, reason: `That would take ${target} below zero (balance ${u.balance}).` };
+    }
+    u.balance += amount;
+    if (amount > 0) u.stats.granted += amount;
+    return { ok: true, entry: this.record({ by, action: amount > 0 ? 'grant' : 'deduct', target, amount, balanceAfter: u.balance, reason }) };
+  }
+
+  /** Wipes a player back to a fresh start, keeping their audit history. */
+  resetUser(by: string, target: string, reason?: string): AuditEntry {
+    const u = this.user(target);
+    u.balance = STARTING_BALANCE;
+    u.stats = emptyStats();
+    u.lastDailyAt = null;
+    return this.record({ by, action: 'reset', target, amount: STARTING_BALANCE, balanceAfter: u.balance, reason });
+  }
+
+  setJackpot(by: string, value: number, reason?: string): { ok: false; reason: string } | { ok: true; entry: AuditEntry } {
+    if (!Number.isInteger(value) || value < 0) return { ok: false, reason: 'Jackpot must be a whole number of credits, zero or more.' };
+    this.data.jackpot = value;
+    return { ok: true, entry: this.record({ by, action: 'jackpot', amount: value, balanceAfter: value, reason }) };
+  }
+
+  private record(entry: Omit<AuditEntry, 'at'>): AuditEntry {
+    const full: AuditEntry = { at: Date.now(), ...entry };
+    this.data.audit.push(full);
+    if (this.data.audit.length > AUDIT_LIMIT) {
+      this.data.audit.splice(0, this.data.audit.length - AUDIT_LIMIT);
+    }
+    this.save();
+    return full;
+  }
+
+  auditLog(limit = 50): AuditEntry[] {
+    return this.data.audit.slice(-limit).reverse();
+  }
+
+  allUsers(): UserRecord[] {
+    return Object.values(this.data.users);
   }
 
   leaderboard(limit = 10): UserRecord[] {

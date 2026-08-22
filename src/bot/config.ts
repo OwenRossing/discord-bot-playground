@@ -33,9 +33,21 @@ export const config = {
   get devGuildId() {
     return process.env.DISCORD_GUILD_ID ?? null;
   },
+  /**
+   * Discord id with unrestricted rights, independent of server permissions.
+   * This is the bot owner: the machine's economy is the bot's own data, so
+   * administering it does not depend on holding Manage Server anywhere.
+   */
+  get superAdminId() {
+    return process.env.SUPER_ADMIN_ID ?? null;
+  },
   storeFile: process.env.STORE_FILE ?? join(process.cwd(), 'data', 'store.json'),
   themeId: process.env.THEME ?? 'pixel',
-};
 
-export const MIN_BET = 1;
-export const MAX_BET = 500;
+  webPort: Number(process.env.WEB_PORT ?? 4317),
+  /** 0.0.0.0 exposes the panel to the LAN; 127.0.0.1 keeps it on this machine. */
+  webHost: process.env.WEB_HOST ?? '127.0.0.1',
+  get webToken() {
+    return process.env.WEB_TOKEN ?? null;
+  },
+};

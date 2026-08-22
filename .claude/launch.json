@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "console",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "src/mock/server.ts"],
+      "port": 4317
+    }
+  ]
+}

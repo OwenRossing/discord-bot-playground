@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slot Console</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="gate" hidden>
+  <div class="panel">
+    <h2>Access token</h2>
+    <p class="muted">Set <code>WEB_TOKEN</code> in <code>.env</code>, then enter it here. Stored in this browser only.</p>
+    <div class="row">
+      <input id="gate-token" class="grow" type="password" placeholder="WEB_TOKEN" autocomplete="off">
+      <button class="act primary" id="gate-go">Enter</button>
+    </div>
+    <p class="err" id="gate-err"></p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <div class="mark">LUCKY<span>7</span>S CONSOLE</div>
+    <nav>
+      <button id="tab-channel" aria-selected="true">Channel</button>
+      <button id="tab-admin" aria-selected="false">Admin</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ---------------------------------------------------- channel -->
+    <section class="view" id="view-channel">
+      <div class="panel">
+        <div class="row">
+          <label for="user-id">Acting as</label>
+          <input id="user-id" value="web-tester" size="14">
+          <input id="user-name" value="Tester" size="10" title="Display name">
+          <span class="grow"></span>
+          <label for="bet">Bet</label>
+          <input id="bet" type="number" value="25" min="1" max="500" size="5">
+          <button class="act primary" id="do-spin">Spin</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="act" data-cmd="balance">/balance</button>
+          <button class="act" data-cmd="daily">/daily</button>
+          <button class="act" data-cmd="leaderboard">/leaderboard</button>
+          <button class="act" data-cmd="stats">/stats</button>
+          <button class="act" data-cmd="odds">/odds</button>
+          <button class="act" data-cmd="seed">/seed</button>
+          <button class="act" data-cmd="fairness">Fairness</button>
+          <span class="grow"></span>
+          <button class="act" id="clear-feed">Clear</button>
+        </div>
+      </div>
+      <div id="feed"></div>
+    </section>
+
+    <!-- ------------------------------------------------------ admin -->
+    <section class="view" id="view-admin" hidden>
+      <div class="panel">
+        <div class="row">
+          <h2 style="margin:0">Pool</h2>
+          <span class="grow"></span>
+          <span class="muted">Jackpot</span>
+          <input id="jackpot-value" type="number" min="0" size="8">
+          <button class="act" id="set-jackpot">Set</button>
+          <button class="act" id="refresh">Refresh</button>
+        </div>
+        <p class="err" id="admin-err"></p>
+        <p class="muted" id="admin-who"></p>
+      </div>
+
+      <div class="panel">
+        <h2>Players</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>User</th><th class="num">Balance</th><th class="num">Granted</th>
+              <th class="num">Spins</th><th class="num">Net</th><th class="num">Return</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="players"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <h2>Audit log</h2>
+        <p class="muted">Every admin action is recorded here. Granted credits stay visible on the leaderboard so the ranking still means something.</p>
+        <table>
+          <thead><tr><th>When</th><th>Action</th><th>Target</th><th class="num">Amount</th><th>Reason</th></tr></thead>
+          <tbody id="audit"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
