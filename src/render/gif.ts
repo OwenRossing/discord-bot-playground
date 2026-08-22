@@ -14,7 +14,16 @@ export interface Frame {
  * the file small and stops colours shimmering between frames, which a
  * per-frame palette would cause on the spinning reels.
  */
-export function encodeGif(frames: Frame[], width: number, height: number, maxColors = 200): Buffer {
+export function encodeGif(
+  frames: Frame[],
+  width: number,
+  height: number,
+  maxColors = 200,
+  // Play once and hold the last frame. A looping spin would leave every past
+  // result in the channel cycling forever, and the final frame is the one
+  // carrying the information anyway.
+  repeat = -1,
+): Buffer {
   const palette = buildPalette(frames, maxColors);
   const gif = GIFEncoder();
   for (let i = 0; i < frames.length; i++) {
@@ -23,7 +32,7 @@ export function encodeGif(frames: Frame[], width: number, height: number, maxCol
       // Only the first frame carries the palette, so it becomes the global one.
       palette: i === 0 ? palette : undefined,
       delay: frames[i].delay,
-      repeat: 0,
+      repeat,
     });
   }
   gif.finish();
