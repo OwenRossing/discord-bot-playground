@@ -6,8 +6,10 @@
   "scripts": {
     "build": "tsc",
     "bot": "tsx src/bot/index.ts",
+    "register": "tsx src/bot/register.ts",
     "mock": "tsx src/mock/server.ts",
-    "proto": "tsx scripts/prototype.ts"
+    "proto": "tsx scripts/prototype.ts",
+    "smoke": "tsx scripts/bot-smoke.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.7",
